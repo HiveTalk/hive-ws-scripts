@@ -1,4 +1,4 @@
 websockets~=10.4        # Last version with good Python 3.9 support
-aiohttp~=3.8.5         # Stable version compatible with Python 3.9
+aiohttp>=3.10.11         # Stable version compatible with Python 3.9
 python-dotenv~=0.21.1  # Well-tested version for Python 3.9+
 typing-extensions>=4.4.0  # Added for better type hint support in Python 3.9
