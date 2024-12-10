@@ -8,7 +8,7 @@ Type=simple
 User=root
 WorkingDirectory=/root/hive-ws-scripts
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/root/hive-ws-scripts/venv/bin/python /root/hive-ws-scripts/relay-listener.py
+ExecStart=/root/hive-ws-scripts/venv/bin/python /root/hive-ws-scripts/relay_listener.py
 Restart=always
 RestartSec=10
 
