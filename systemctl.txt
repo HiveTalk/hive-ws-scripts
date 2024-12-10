@@ -1,26 +1,13 @@
 [Unit]
-Description=WebSocket to Discord Relay Listener
+Description=Relay Listener Service
 After=network.target
-StartLimitIntervalSec=0
 
 [Service]
-Type=simple
-User=root
-WorkingDirectory=/root/hive-ws-scripts
-Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/root/hive-ws-scripts/.env
 ExecStart=/root/hive-ws-scripts/venv/bin/python /root/hive-ws-scripts/relay_listener.py
+WorkingDirectory=/root/hive-ws-scripts
 Restart=always
-RestartSec=10
-
-# Optional but recommended security settings
-ProtectSystem=full
-PrivateTmp=true
-NoNewPrivileges=true
-ProtectHome=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
