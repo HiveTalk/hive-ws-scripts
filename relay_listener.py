@@ -43,7 +43,6 @@ class Config:
     subscription_filters: List[Dict[str, Any]]
     max_retries: int = 5
     retry_delay: int = 5
-    message_queue_size: int = 1000
     time_range: Optional[int] = None  # Time range in hours, None means only new events
 
     @classmethod
@@ -77,7 +76,6 @@ class Config:
             subscription_filters=subscription_filters,
             max_retries=int(os.getenv('MAX_RETRIES', '5')),
             retry_delay=int(os.getenv('RETRY_DELAY', '5')),
-            message_queue_size=int(os.getenv('MESSAGE_QUEUE_SIZE', '1000')),
             time_range=args.time_range
         )
 
@@ -153,7 +151,6 @@ class NostrRelayClient:
     """Nostr relay client implementation"""
     def __init__(self, config: Config):
         self.config = config
-        self.message_queue: asyncio.Queue = asyncio.Queue(maxsize=config.message_queue_size)
         self.subscription_id = "main"  # You might want to make this configurable
 
     async def subscribe(self, websocket):
@@ -184,29 +181,11 @@ class NostrRelayClient:
             logger.error(f"Error processing event: {str(e)}")
             return None
 
-    async def message_consumer(self, webhook: DiscordWebhook):
-        """Consume messages from the queue and send them to Discord"""
-        while True:
-            message = await self.message_queue.get()
-            logger.info(f"Attempting to send message to Discord: {message[:100]}...")
-            success = await webhook.send_message(message)
-            if not success:
-                logger.error("Failed to send message to Discord")
-                try:
-                    self.message_queue.put_nowait(message)
-                except asyncio.QueueFull:
-                    logger.error("Message queue full, dropping message")
-            else:
-                logger.info("Successfully sent message to Discord")
-            self.message_queue.task_done()
-
     async def run(self):
         """Main execution loop"""
         retry_count = 0
 
         async with DiscordWebhook(self.config.discord_webhook_url) as webhook:
-            consumer_task = asyncio.create_task(self.message_consumer(webhook))
-
             while retry_count < self.config.max_retries:
                 try:
                     async with websockets.connect(self.config.relay_url) as websocket:
@@ -227,8 +206,8 @@ class NostrRelayClient:
                                     logger.info(f"Received event: {json.dumps(event_data, indent=2)}")
                                     formatted_message = await self.process_event(event_data)
                                     if formatted_message:
-                                        await self.message_queue.put(formatted_message)
-                                        logger.info(f"Queued {NostrKind(event_data.get('kind', -1)).name} event")
+                                        logger.info(f"Sending {NostrKind(event_data.get('kind', -1)).name} event to Discord")
+                                        await webhook.send_message(formatted_message)
                                 elif message_type == "EOSE":
                                     logger.info("End of stored events")
                                 elif message_type == "NOTICE":
@@ -250,11 +229,6 @@ class NostrRelayClient:
                     await asyncio.sleep(wait_time)
 
             logger.error("Max retries reached. Exiting.")
-            consumer_task.cancel()
-            try:
-                await consumer_task
-            except asyncio.CancelledError:
-                pass
 
 def main():
     """Entry point of the script"""
