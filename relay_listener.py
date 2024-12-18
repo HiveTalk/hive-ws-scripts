@@ -68,11 +68,14 @@ async def format_nostr_event(event_data: Dict[str, Any]) -> str:
     except ValueError:
         kind_name = f"UNKNOWN_KIND_{kind}"
 
+    pretty_date = str(datetime.now())
+
     return (
         f"\n"
+        f"Date:{pretty_date}\n"
         f"Event Type: {kind_name}\n"
         f"Author: {event_data.get('pubkey', 'unknown')[:8]}...\n"
-        f"Content: {event_data.get('content', '')}\n"
+        f"Content: {event_data.get('tags')}\n"
     )
 
 async def listen_and_relay():
@@ -109,6 +112,7 @@ async def listen_and_relay():
                         if isinstance(data, list) and len(data) >= 2 and data[0] == "EVENT":
                             event_data = data[2]
                             formatted_message = await format_nostr_event(event_data)
+                            print("Sending to Discord:", formatted_message)
                             await webhook.send_message(formatted_message)
 
             except Exception as e:
