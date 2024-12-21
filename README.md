@@ -2,7 +2,7 @@
 
 A collection of utility scripts to help facilitate monitoring of hivetalk activity
 
-## relay_listner
+## relay_listener
 
 To run the relay listener, you can use the following command:
 
