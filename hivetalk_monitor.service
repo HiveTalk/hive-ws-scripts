@@ -1,0 +1,13 @@
+[Unit]
+Description=HiveTalk API Monitor Service
+After=network.target
+
+[Service]
+WorkingDirectory=/root/hive-ws-scripts
+Restart=always
+User=root
+Group=root
+ExecStart=/root/hive-ws-scripts/venv/bin/python /root/hive-ws-scripts/smart_hive_ws.py --env all
+
+[Install]
+WantedBy=multi-user.target
