@@ -30,11 +30,18 @@ python smart_hive_ws.py --env production
 ```
 
 
-## Listen to both environments
+## Listen to both environments using websockets
+
+```python
 python ws_subscriber.py
+```
 
 ## Listen to staging only
+```python
 python ws_subscriber.py --env staging
+```
 
 ## Listen to production only
+```python
 python ws_subscriber.py --env production
+```
