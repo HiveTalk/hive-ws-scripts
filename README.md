@@ -4,6 +4,8 @@ A collection of utility scripts to help facilitate monitoring of hivetalk activi
 
 ## relay_listener
 
+The Relay listener listens for hivetalk event kind 30311, when created on the dashboard and pushes the data to discord. This is primarily for QC purposes but can be extended in the future for prettified display so that discord users can see event creation, update and deletion. 
+
 To run the relay listener, you can use the following command:
 
 ```python
