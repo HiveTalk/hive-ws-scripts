@@ -4,6 +4,7 @@ import asyncio
 import logging
 import aiohttp
 import argparse
+import ssl
 import websockets
 from datetime import datetime
 from dotenv import load_dotenv
@@ -21,6 +22,8 @@ def setup_environment(env):
     api_url = os.getenv(f'{prefix}API_URL')
     base_join_url = os.getenv(f'{prefix}BASE_JOIN_URL')
     ws_port = int(os.getenv(f'{prefix}WS_PORT', '8765' if env == 'staging' else '8766'))
+    ssl_cert = os.getenv(f'{prefix}SSL_CERT')
+    ssl_key = os.getenv(f'{prefix}SSL_KEY')
 
     if not all([api_key, webhook_url, api_url, base_join_url]):
         missing = [var for var, val in {
@@ -37,8 +40,19 @@ def setup_environment(env):
         'api_url': api_url,
         'base_join_url': base_join_url,
         'env': env,
-        'ws_port': ws_port
+        'ws_port': ws_port,
+        'ssl_cert': ssl_cert,
+        'ssl_key': ssl_key
     }
+
+def create_ssl_context(ssl_cert, ssl_key):
+    """Create SSL context for secure WebSocket"""
+    if not (ssl_cert and ssl_key and os.path.exists(ssl_cert) and os.path.exists(ssl_key)):
+        return None
+        
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_context.load_cert_chain(ssl_cert, ssl_key)
+    return ssl_context
 
 # Set up logging
 logging.basicConfig(
@@ -91,9 +105,20 @@ async def handle_websocket_client(websocket, path):
         connected_clients.remove(websocket)
         logging.info(f"WebSocket client disconnected: {websocket.remote_address}")
 
-async def start_websocket_server(port):
-    """Start WebSocket server"""
-    async with websockets.serve(handle_websocket_client, "localhost", port):
+async def start_websocket_server(port, config):
+    """Start WebSocket server with optional SSL"""
+    ssl_context = None
+    if config.get('ssl_cert') and config.get('ssl_key'):
+        ssl_context = create_ssl_context(config['ssl_cert'], config['ssl_key'])
+        protocol = "wss" if ssl_context else "ws"
+        logging.info(f"Starting {protocol}:// server on port {port}")
+    
+    async with websockets.serve(
+        handle_websocket_client,
+        "0.0.0.0",  # Listen on all interfaces
+        port,
+        ssl=ssl_context
+    ):
         logging.info(f"WebSocket server started on port {port}")
         await asyncio.Future()  # run forever
 
@@ -187,7 +212,7 @@ async def run_all_environments():
         raise ValueError("No valid environment configurations found")
 
     # Start WebSocket servers for each environment
-    ws_servers = [start_websocket_server(config['ws_port']) for config in configs]
+    ws_servers = [start_websocket_server(config['ws_port'], config) for config in configs]
 
     # Create tasks for each environment
     polling_tasks = [poll_api(config) for config in configs]
@@ -212,7 +237,7 @@ def main():
         config = setup_environment(args.env)
         # Start both WebSocket server and API polling
         asyncio.run(asyncio.gather(
-            start_websocket_server(config['ws_port']),
+            start_websocket_server(config['ws_port'], config),
             poll_api(config)
         ))
 
