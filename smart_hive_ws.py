@@ -21,6 +21,8 @@ def setup_environment(env):
     api_url = os.getenv(f'{prefix}API_URL')
     base_join_url = os.getenv(f'{prefix}BASE_JOIN_URL')
     ws_port = int(os.getenv(f'{prefix}WS_PORT', '8765' if env == 'staging' else '8766'))
+    ssl_cert = os.getenv(f'{prefix}SSL_CERT')
+    ssl_key = os.getenv(f'{prefix}SSL_KEY')
 
     if not all([api_key, webhook_url, api_url, base_join_url]):
         missing = [var for var, val in {
@@ -37,7 +39,9 @@ def setup_environment(env):
         'api_url': api_url,
         'base_join_url': base_join_url,
         'env': env,
-        'ws_port': ws_port
+        'ws_port': ws_port,
+        'ssl_cert': ssl_cert,
+        'ssl_key': ssl_key
     }
 
 # Set up logging
@@ -91,10 +95,10 @@ async def handle_websocket_client(websocket, path):
         connected_clients.remove(websocket)
         logging.info(f"WebSocket client disconnected: {websocket.remote_address}")
 
-async def start_websocket_server(port):
+async def start_websocket_server(host, port, ssl_context=None):
     """Start WebSocket server"""
-    async with websockets.serve(handle_websocket_client, "localhost", port):
-        logging.info(f"WebSocket server started on port {port}")
+    async with websockets.serve(handle_websocket_client, host, port, ssl=ssl_context):
+        logging.info(f"WebSocket server started on {host}:{port} {'with SSL' if ssl_context else 'without SSL'}")
         await asyncio.Future()  # run forever
 
 async def send_discord_update(data, config):
@@ -187,7 +191,7 @@ async def run_all_environments():
         raise ValueError("No valid environment configurations found")
 
     # Start WebSocket servers for each environment
-    ws_servers = [start_websocket_server(config['ws_port']) for config in configs]
+    ws_servers = [start_websocket_server('localhost', config['ws_port']) for config in configs]
 
     # Create tasks for each environment
     polling_tasks = [poll_api(config) for config in configs]
@@ -196,25 +200,34 @@ async def run_all_environments():
     await asyncio.gather(*ws_servers, *polling_tasks)
 
 def main():
-    parser = argparse.ArgumentParser(description='HiveTalk API Monitor')
-    parser.add_argument('--env', choices=['staging', 'production', 'all'], default='all',
-                      help='Environment to monitor (staging, production, or all)')
+    parser = argparse.ArgumentParser(description='Start the HiveTalk WebSocket server')
+    parser.add_argument('--host', default='localhost', help='Host to bind the WebSocket server to')
+    parser.add_argument('--staging', action='store_true', help='Run in staging mode')
     args = parser.parse_args()
 
     # Load environment variables
     load_dotenv()
-
-    if args.env == 'all':
-        # Run both environments concurrently
-        asyncio.run(run_all_environments())
-    else:
-        # Run single environment
-        config = setup_environment(args.env)
-        # Start both WebSocket server and API polling
-        asyncio.run(asyncio.gather(
-            start_websocket_server(config['ws_port']),
-            poll_api(config)
-        ))
+    
+    env = "staging" if args.staging else "production"
+    config = setup_environment(env)
+    
+    # Set up SSL context if certificates are provided
+    ssl_context = None
+    if config['ssl_cert'] and config['ssl_key']:
+        import ssl
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(config['ssl_cert'], config['ssl_key'])
+        logging.info("SSL context created with provided certificates")
+    
+    # Create event loop and run both the polling and WebSocket server
+    loop = asyncio.get_event_loop()
+    try:
+        loop.create_task(poll_api(config))
+        loop.run_until_complete(start_websocket_server(args.host, config['ws_port'], ssl_context))
+    except KeyboardInterrupt:
+        logging.info("Server shutdown requested")
+    finally:
+        loop.close()
 
 if __name__ == "__main__":
     main()
